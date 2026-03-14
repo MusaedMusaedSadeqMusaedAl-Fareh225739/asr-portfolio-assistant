@@ -1,0 +1,11 @@
+ticker,name,sector,asset_class,quantity,purchase_price
+AAPL,Apple Inc.,Technology,Equity,50,150.00
+MSFT,Microsoft Corporation,Technology,Equity,30,280.00
+JPM,JPMorgan Chase & Co.,Financials,Equity,40,130.00
+JNJ,Johnson & Johnson,Healthcare,Equity,25,160.00
+XOM,Exxon Mobil Corporation,Energy,Equity,35,90.00
+BND,Vanguard Total Bond Market ETF,Fixed Income,Bond,100,75.00
+GLD,SPDR Gold Shares,Commodities,Commodity,20,170.00
+AMZN,Amazon.com Inc.,Consumer Discretionary,Equity,15,3200.00
+GOOGL,Alphabet Inc.,Technology,Equity,10,2800.00
+VNQ,Vanguard Real Estate ETF,Real Estate,REIT,60,85.00
