@@ -45,10 +45,13 @@ TOOL USAGE RULES:
 - For efficient frontier: use show_efficient_frontier
 - For concentration risk: use show_concentration_risk
 - For rolling metrics: use show_rolling_metrics
+- For rebalancing advice: use suggest_rebalancing
 
 You can chain multiple tools in one turn. For example, if asked "analyze my portfolio risk", you might call show_risk_metrics, then run_stress_test, then show_concentration_risk.
 
-If a tool returns an error, tell the user honestly — never fabricate data. Use EUR for currency."""
+If a tool returns an error, tell the user honestly — never fabricate data. Use EUR for currency.
+
+PLAIN ENGLISH RULE: After presenting data, always add a brief plain-language explanation of what the numbers mean for the investor. For example: "A Sharpe of 0.85 means you earn 0.85% excess return per unit of risk — solid for a diversified portfolio." or "A max drawdown of -18.9% means at worst you would have lost about 1 in 5 euros during the period." This is critical — a.s.r. serves institutional and retail clients who need clarity."""
 
 TOOLS = [
     {"type": "function", "function": {
@@ -105,6 +108,12 @@ TOOLS = [
         "name": "show_rolling_metrics",
         "description": "Show 12-month rolling Sharpe ratio, volatility, and beta for the portfolio.",
         "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {
+        "name": "suggest_rebalancing",
+        "description": "Suggest trades to rebalance the portfolio, reducing overweight sectors and improving diversification.",
+        "parameters": {"type": "object", "properties": {
+            "max_sector_pct": {"type": "number", "default": 30.0, "description": "Maximum allowed weight per sector (%)"}},
+            "required": []}}},
 ]
 
 
@@ -297,6 +306,21 @@ class PortfolioController:
                 latest_sharpe = rm["sharpe"][-1] if rm["sharpe"] else 0
                 latest_vol = rm["volatility"][-1] if rm["volatility"] else 0
                 return _clean(f"Rolling 12-month: Sharpe={latest_sharpe:.3f}, Vol={latest_vol:.2f}%")
+
+            elif name == "suggest_rebalancing":
+                max_pct = inputs.get("max_sector_pct", 30.0)
+                view.print_info(f"Computing rebalancing suggestions (max {max_pct}% per sector)...")
+                suggestions = p.rebalancing_suggestions(max_sector_pct=max_pct)
+                if not suggestions:
+                    return "Portfolio is well-balanced. No rebalancing needed."
+                lines = ["Rebalancing suggestions:"]
+                for s in suggestions:
+                    lines.append(
+                        f"  {s['action']} {s['shares']} shares of {s['ticker']} "
+                        f"(~EUR{s['value']:,.0f}) — {s['sector']} sector "
+                        f"from {s['current_sector_pct']:.1f}% → {s['target_sector_pct']:.1f}%")
+                view.show_rebalancing(suggestions)
+                return _clean("\n".join(lines))
 
             return f"Unknown tool: {name}"
         except Exception as exc:

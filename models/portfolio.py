@@ -485,6 +485,58 @@ class Portfolio:
                                "limit_pct": max_sector_pct, "excess_pct": round(w - max_sector_pct, 1)})
         return alerts
 
+    # ── Rebalancing Suggestions ───────────────────────────────────────────
+    def rebalancing_suggestions(self, target_sector_pct: dict | None = None,
+                                 max_sector_pct: float = 30.0) -> list[dict]:
+        """Suggest trades to rebalance portfolio toward target weights."""
+        tv = self.total_value or 1
+        suggestions = []
+
+        # If no target provided, use equal-sector weighting capped at max
+        if not target_sector_pct:
+            sectors = set(a.sector for a in self.assets)
+            equal_w = min(100 / len(sectors), max_sector_pct)
+            target_sector_pct = {s: equal_w for s in sectors}
+
+        # Current sector weights
+        current_sector = {}
+        for a in self.assets:
+            current_sector[a.sector] = current_sector.get(a.sector, 0) + a.current_value
+
+        for sector, target_pct in target_sector_pct.items():
+            current_val = current_sector.get(sector, 0)
+            current_pct = current_val / tv * 100
+            target_val = tv * target_pct / 100
+            diff_val = target_val - current_val
+            diff_pct = target_pct - current_pct
+
+            if abs(diff_pct) < 1.0:  # skip trivial changes
+                continue
+
+            # Find assets in this sector
+            sector_assets = [a for a in self.assets if a.sector == sector]
+            if not sector_assets:
+                continue
+
+            action = "BUY" if diff_val > 0 else "SELL"
+            # Distribute change across sector assets proportionally
+            for a in sector_assets:
+                asset_share = a.current_value / current_val if current_val > 0 else 1 / len(sector_assets)
+                asset_change = diff_val * asset_share
+                shares = int(abs(asset_change) / (a.current_price or a.purchase_price))
+                if shares > 0:
+                    suggestions.append({
+                        "action": action,
+                        "ticker": a.ticker,
+                        "shares": shares,
+                        "value": round(abs(asset_change), 2),
+                        "sector": sector,
+                        "current_sector_pct": round(current_pct, 1),
+                        "target_sector_pct": round(target_pct, 1),
+                    })
+
+        return suggestions
+
     # ── Rolling Metrics ───────────────────────────────────────────────────
     def rolling_metrics(self, window: int = TRADING_DAYS) -> dict:
         """Rolling Sharpe, volatility, beta for the portfolio."""
@@ -625,12 +677,14 @@ class Portfolio:
             # Correlate: (n_assets, trading_days, batch)
             corr_Z = np.tensordot(L, Z, axes=(1, 0))
 
-            # Simulate each asset: log returns
-            # mu_vec shape (n_assets,) → broadcast
+            # Simulate each asset: log returns using correlated noise
+            # corr_Z already has the right covariance structure from Cholesky
+            # So we use: log_r_i = (mu_i - 0.5 * var_i) + corr_Z_i
+            # where corr_Z_i already contains the volatility scaling
             log_r = np.zeros_like(corr_Z)
             for i in range(n_assets):
-                sig_i = np.sqrt(cov_matrix[i, i])
-                log_r[i] = (mu_vec[i] - 0.5 * sig_i ** 2) + sig_i * corr_Z[i]
+                daily_var = cov_matrix[i, i]
+                log_r[i] = (mu_vec[i] - 0.5 * daily_var) + corr_Z[i]
 
             # Cumulative paths per asset: shape (n_assets, trading_days, batch)
             cum_log = np.cumsum(log_r, axis=1)

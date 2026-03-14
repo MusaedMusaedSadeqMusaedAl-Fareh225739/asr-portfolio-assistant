@@ -438,3 +438,17 @@ def show_rolling_metrics(rm: dict) -> None:
     if rm.get("beta"):
         text += f"  Latest Beta: {rm['beta'][-1]:.3f}\n"
     console.print(Panel(text, title="📈 Rolling Metrics", border_style="blue", expand=False))
+
+
+def show_rebalancing(suggestions: list[dict]) -> None:
+    """Display rebalancing suggestions."""
+    if not suggestions:
+        console.print("[green]✓ Portfolio is well-balanced.[/green]")
+        return
+    text = "[bold]Rebalancing Suggestions[/bold]\n\n"
+    for s in suggestions:
+        c = "red" if s["action"] == "SELL" else "green"
+        text += (f"  [{c}]{s['action']}[/{c}] {s['shares']} shares of "
+                f"[bold]{s['ticker']}[/bold] (~€{s['value']:,.0f})\n"
+                f"    {s['sector']}: {s['current_sector_pct']:.1f}% → {s['target_sector_pct']:.1f}%\n\n")
+    console.print(Panel(text, title="⚖️ Rebalancing", border_style="cyan", expand=False))
